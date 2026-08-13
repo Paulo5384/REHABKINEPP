@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa territorial — Rehab Kinésica Piso Pélvico</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root{
+    --bg:#f6f5f2; --card:#ffffff; --ink:#1f2320; --ink-soft:#565b56; --ink-mute:#8a8f89;
+    --line:#dcdcd6; --line-strong:#b9bcb4;
+    --accent:#b5652f;
+    --warn:#a3781f; --warn-bg:#faf1de;
+    --ok:#2f6e4f; --ok-bg:#e5f0e9;
+    --crit:#9c3b3b; --crit-bg:#f7e7e7;
+    --radius:10px; --mono:"IBM Plex Mono","SF Mono",Consolas,monospace; --sans:"IBM Plex Sans",-apple-system,"Segoe UI",sans-serif;
+    --sem-ok:#2f8f5b; --sem-warn:#d9a521; --sem-prio:#d9791f; --sem-crit:#c0392b; --sem-nodata:#e4e4e0;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;padding:0 0 64px;}
+  .wrap{max-width:1000px;margin:0 auto;padding:32px 16px 0;}
+  header{margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-mute);margin:0 0 8px;}
+  h1{font-size:22px;font-weight:600;margin:0 0 6px;letter-spacing:-0.01em;}
+  .subtitle{font-size:13.5px;color:var(--ink-soft);margin:0;max-width:640px;}
+  .print-btn{
+    font-family:var(--sans);font-size:12.5px;font-weight:600;color:var(--ink);
+    background:var(--card);border:1px solid var(--line-strong);border-radius:8px;padding:8px 14px;cursor:pointer;
+    white-space:nowrap;height:fit-content;
+  }
+  .print-btn:hover{border-color:var(--ink-soft);}
+  .demo-banner{
+    background:var(--warn-bg);border:1px solid var(--warn);border-radius:var(--radius);
+    padding:10px 14px;font-size:12px;color:#5c4413;margin:16px 0;
+  }
+
+  /* ---- barra superior de controles ---- */
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:16px 0;padding:12px 14px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);}
+  .toolbar-group{display:flex;flex-direction:column;gap:4px;}
+  .toolbar-group label.group-label{font-size:10.5px;font-weight:600;color:var(--ink-mute);text-transform:uppercase;letter-spacing:.03em;}
+  .seg{display:flex;border:1px solid var(--line-strong);border-radius:7px;overflow:hidden;}
+  .seg button{
+    font-family:var(--sans);font-size:12px;font-weight:600;color:var(--ink-soft);background:var(--card);
+    border:none;padding:6px 11px;cursor:pointer;border-right:1px solid var(--line-strong);
+  }
+  .seg button:last-child{border-right:none;}
+  .seg button.active{background:var(--ink);color:#fff;}
+  select.snapshot-select{
+    font-family:var(--sans);font-size:12.5px;color:var(--ink);background:var(--card);
+    border:1px solid var(--line-strong);border-radius:7px;padding:6px 9px;cursor:pointer;
+  }
+  .trend-tag{font-family:var(--mono);font-size:11px;padding:3px 7px;border-radius:6px;font-weight:600;}
+  .trend-up{background:var(--crit-bg);color:var(--crit);}
+  .trend-down{background:var(--ok-bg);color:var(--ok);}
+  .trend-flat{background:#eef0ee;color:var(--ink-mute);}
+  .toggle-chip{
+    display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-soft);cursor:pointer;
+    border:1px solid var(--line-strong);border-radius:7px;padding:6px 10px;background:var(--card);
+  }
+  .toggle-chip input{cursor:pointer;}
+  .toggle-chip.active{background:#fdf3ea;border-color:var(--accent);color:var(--accent);font-weight:600;}
+
+  .map-stats{font-family:var(--mono);font-size:11px;color:var(--ink-mute);margin-bottom:14px;}
+  .map-controls{display:flex;gap:16px;margin-bottom:14px;align-items:flex-start;flex-wrap:wrap;}
+  .spec-panel{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    max-height:260px;min-width:220px;flex:1;display:flex;flex-direction:column;overflow:hidden;
+  }
+  .spec-panel.disabled{opacity:.4;pointer-events:none;}
+  .spec-panel-sticky{padding:10px 12px 8px;border-bottom:1px solid var(--line);flex-shrink:0;background:var(--card);}
+  .spec-panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;}
+  .spec-panel-head span{font-size:11px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;}
+  .spec-panel-actions{display:flex;gap:10px;}
+  .spec-panel-actions button{font-size:11px;background:none;border:none;color:var(--accent);cursor:pointer;font-weight:600;padding:0;}
+  .spec-scroll{overflow-y:auto;padding:8px 12px 10px;}
+  .spec-item{display:flex;align-items:center;gap:7px;font-size:12.5px;padding:3px 0;}
+  #map{height:480px;border-radius:var(--radius);border:1px solid var(--line);}
+  .map-legend{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:12px;color:var(--ink-soft);flex-wrap:wrap;}
+  .map-legend .grad{width:120px;height:10px;border-radius:5px;background:linear-gradient(90deg,#dceefb,#0b5c85);}
+  .map-legend .nodata{display:inline-flex;align-items:center;gap:6px;}
+  .map-legend .swatch{width:12px;height:12px;border-radius:3px;display:inline-block;border:1px solid var(--line-strong);}
+  .sem-legend{display:flex;gap:14px;flex-wrap:wrap;}
+  .sem-legend span{display:flex;align-items:center;gap:6px;}
+  .comuna-label{
+    background:rgba(255,255,255,0.85)!important;border:none!important;box-shadow:none!important;font-family:var(--mono);
+    font-size:10.5px;font-weight:600;color:var(--ink);padding:1px 4px;border-radius:4px;
+  }
+  .comuna-label::before{display:none;}
+  .ranking{margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;}
+  .ranking h3{font-size:12px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;margin:0 0 10px;}
+  .rank-row{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0;}
+  .rank-row .rname{flex:0 0 130px;color:var(--ink);}
+  .rank-row .rbar-wrap{flex:1;background:#eef2f8;border-radius:4px;overflow:hidden;height:14px;}
+  .rank-row .rbar{height:100%;background:#0b5c85;}
+  .rank-row .rval{flex:0 0 78px;text-align:right;font-family:var(--mono);color:var(--ink-soft);font-size:11.5px;}
+  .rank-row .rdot{width:9px;height:9px;border-radius:2px;flex:0 0 9px;}
+
+  .comuna-detail{
+    margin-top:12px;background:var(--card);border:1px solid var(--accent);border-left:3px solid var(--accent);
+    border-radius:var(--radius);padding:12px 14px;
+  }
+  .comuna-detail-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+  .comuna-detail-head h3{font-size:15px;font-weight:600;margin:0;color:var(--ink);display:flex;align-items:center;gap:8px;}
+  .comuna-detail-head p{font-size:12px;color:var(--ink-soft);margin:2px 0 0;}
+  .comuna-detail-head button{background:none;border:none;color:var(--ink-mute);cursor:pointer;font-size:14px;padding:2px 4px;}
+  .comuna-detail-head button:hover{color:var(--ink);}
+  .cd-row{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0;}
+  .cd-row .cname{flex:0 0 180px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cd-row .cbar-wrap{flex:1;background:#eef2f8;border-radius:4px;overflow:hidden;height:12px;}
+  .cd-row .cbar{height:100%;background:var(--accent);}
+  .cd-row .cval{flex:0 0 34px;text-align:right;font-family:var(--mono);color:var(--ink-soft);}
+  .cd-more{font-size:11.5px;color:var(--ink-mute);margin-top:6px;}
+  .cd-note{font-size:11.5px;color:var(--warn);margin-top:8px;background:var(--warn-bg);padding:6px 8px;border-radius:6px;}
+  .sem-badge{font-family:var(--mono);font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:uppercase;}
+
+  @media (max-width:640px){
+    .map-controls{flex-direction:column;} #map{height:360px;}
+    header{flex-direction:column;}
+  }
+
+  /* ---- impresión ---- */
+  @media print{
+    body{background:#fff;padding:0;}
+    .print-btn, .demo-banner, .toolbar, .spec-panel, .toggle-chip, footer{display:none !important;}
+    .wrap{max-width:100%;}
+    #map{height:520px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <p class="eyebrow">Rehabilitación Kinésica · Piso Pélvico · Servicio de Salud del Reloncaví</p>
+      <h1>Mapa territorial de demanda — Lista de espera</h1>
+      <p class="subtitle">Georreferenciación de la lista de espera por comuna, con volumen, tasa por habitante y urgencia de espera.</p>
+    </div>
+    <button class="print-btn" id="print-btn">🖨️ Imprimir / Exportar PDF</button>
+  </header>
+
+  <div class="demo-banner" id="demo-banner">
+    <strong>Estado de los datos:</strong> volumen total, estado del caso, días de espera (activa/cerrada, medida desde FECHA DE INTERCONSULTA) y desglose por especialidad son <strong>reales</strong> (extraídos el 13-08-2026). ⚠️ 6 filas tienen fecha de ingreso anterior a la de interconsulta — quedaron excluidas de los promedios y deben corregirse en origen (filas 4, 163, 280, 333, 561, 717 en la planilla) cuando el equipo tenga tiempo. Comunas con menos de 5 personas en la muestra de espera se marcan con ⚠ en el ranking — interpretar sus promedios con cautela.
+  </div>
+
+  <div class="toolbar">
+    <div class="toolbar-group">
+      <label class="group-label">Ver por</label>
+      <div class="seg" id="view-mode-seg">
+        <button data-mode="volumen" class="active">Volumen</button>
+        <button data-mode="tasa">Tasa x10.000 hab.</button>
+        <button data-mode="urgencia">Urgencia (espera activa)</button>
+      </div>
+    </div>
+    <div class="toolbar-group">
+      <label class="group-label">Período</label>
+      <select class="snapshot-select" id="snapshot-select"></select>
+    </div>
+    <div class="toolbar-group">
+      <label class="group-label">&nbsp;</label>
+      <span class="trend-tag" id="trend-tag"></span>
+    </div>
+    <div class="toolbar-group">
+      <label class="group-label">&nbsp;</label>
+      <label class="toggle-chip" id="chip-prioridad">
+        <input type="checkbox" id="chk-prioridad"> Prioridad clínica (oncológicas)
+      </label>
+    </div>
+    <div class="toolbar-group">
+      <label class="group-label">&nbsp;</label>
+      <label class="toggle-chip" id="chip-auditoria">
+        <input type="checkbox" id="chk-auditoria"> Modo auditoría
+      </label>
+    </div>
+  </div>
+
+  <p class="map-stats" id="map-stats"></p>
+
+  <div class="map-controls">
+    <div class="spec-panel" id="panel-especialidad">
+      <div class="spec-panel-sticky">
+        <div class="spec-panel-head">
+          <span>Filtro especialidad</span>
+          <div class="spec-panel-actions">
+            <button id="spec-all">Todas</button>
+            <button id="spec-clear">Limpiar</button>
+          </div>
+        </div>
+      </div>
+      <div class="spec-scroll" id="spec-scroll"><div id="spec-list"></div></div>
+    </div>
+    <div class="spec-panel" id="panel-estado">
+      <div class="spec-panel-sticky">
+        <div class="spec-panel-head">
+          <span>Filtro estado</span>
+          <div class="spec-panel-actions">
+            <button id="estado-all">Todos</button>
+            <button id="estado-clear">Limpiar</button>
+          </div>
+        </div>
+      </div>
+      <div class="spec-scroll" id="estado-scroll"><div id="estado-list"></div></div>
+    </div>
+  </div>
+  <p style="font-size:11px;color:var(--ink-mute);margin:-8px 0 12px;">Los filtros de especialidad y estado son excluyentes entre sí: activar uno limpia el otro, para no mezclar datos que no están cruzados.</p>
+
+  <div id="map"></div>
+  <div class="comuna-detail" id="comuna-detail" style="display:none;">
+    <div class="comuna-detail-head">
+      <div>
+        <h3 id="cd-title">Comuna</h3>
+        <p id="cd-sub">0 personas</p>
+      </div>
+      <button id="cd-close" aria-label="Cerrar">✕</button>
+    </div>
+    <div id="cd-list"></div>
+    <div id="cd-note" class="cd-note" style="display:none;"></div>
+  </div>
+  <div id="map-error" style="display:none;padding:14px;background:var(--warn-bg);border:1px solid var(--warn);border-radius:var(--radius);color:#5c4413;font-size:13px;">
+    No se pudo cargar <code>loslagos.geojson</code>. Verifica que esté en la misma carpeta que este HTML.
+  </div>
+  <p style="font-size:11.5px;color:var(--ink-mute);margin:8px 0 0;">Haz clic en una comuna para ver el detalle.</p>
+  <div class="map-legend" id="legend-volumen">
+    <span id="legend-min">Menos</span>
+    <span class="grad"></span>
+    <span id="legend-max">Más</span>
+    <span class="nodata"><span class="swatch" style="background:#e4e4e0;"></span> Sin datos</span>
+  </div>
+  <div class="map-legend sem-legend" id="legend-urgencia" style="display:none;">
+    <span><span class="swatch" style="background:var(--sem-ok);"></span> Al día (≤90 días)</span>
+    <span><span class="swatch" style="background:var(--sem-warn);"></span> Atención (91–180)</span>
+    <span><span class="swatch" style="background:var(--sem-prio);"></span> Prioritario (181–365)</span>
+    <span><span class="swatch" style="background:var(--sem-crit);"></span> Crítico (&gt;365)</span>
+    <span><span class="swatch" style="background:var(--sem-nodata);"></span> Sin datos</span>
+  </div>
+
+  <div class="ranking">
+    <h3 id="ranking-title">Ranking de comunas</h3>
+    <div id="ranking-list"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* =====================================================================
+   1. POBLACIÓN POR COMUNA — aproximada, Censo 2017 (fuente pública).
+      Reemplazar por el dato oficial que prefieras usar (Censo 2024, INE, etc).
+   ===================================================================== */
+const POBLACION_COMUNA = {
+  "Puerto Montt": 245902, "Calbuco": 33558, "Puerto Varas": 46079, "Frutillar": 18133,
+  "Maullín": 16657, "Llanquihue": 17999, "Fresia": 13343, "Los Muermos": 15183,
+  "Hualaihué": 8944, "Chaitén": 4830, "Castro": 43632, "Cochamó": 4404,
+  "Ancud": 40610, "Futaleufú": 2073, "Palena": 1842, "Quellón": 25010
+};
+
+/* =====================================================================
+   2. RANGOS DE ESPERA (semáforo de urgencia) — ajustables.
+   ===================================================================== */
+const RANGOS_ESPERA = [
+  { max: 90,  nivel: "ok",    label: "Al día",      color: "var(--sem-ok)" },
+  { max: 180, nivel: "warn",  label: "Atención",    color: "var(--sem-warn)" },
+  { max: 365, nivel: "prio",  label: "Prioritario", color: "var(--sem-prio)" },
+  { max: Infinity, nivel: "crit", label: "Crítico", color: "var(--sem-crit)" }
+];
+function nivelEspera(dias){
+  if(dias == null) return null;
+  for(const r of RANGOS_ESPERA) if(dias <= r.max) return r;
+  return RANGOS_ESPERA[RANGOS_ESPERA.length-1];
+}
+const SEM_COLOR_HEX = { ok:"#2f8f5b", warn:"#d9a521", prio:"#d9791f", crit:"#c0392b" };
+
+/* =====================================================================
+   3. DATOS POR PERÍODO — REEMPLAZAR con la exportación real de Excel.
+      Cada snapshot mensual trae, por comuna:
+      - totalComuna: total personas con comuna válida
+      - porEspecialidad: {especialidad: cantidad} (solo especialidad válida)
+      - porEstado: {Pendiente, Citada, Ingresada} (aprox., suma <= totalComuna)
+      - esperaPromedioDias: promedio de días de espera en esa comuna
+      - tieneOncologica: true si hay al menos 1 caso de Ginecología Oncología
+   ===================================================================== */
+const REAL_DATA_HISTORY = {
+  "2026-08-13": {
+    "comunas": [
+        {
+            "comuna": "Ancud",
+            "totalComuna": 4,
+            "porEspecialidad": {
+                "Nefrologia": 1
+            },
+            "porEstado": {
+                "Alta Administrativa": 2,
+                "Citada": 0,
+                "Ingresada": 2,
+                "Pendiente": 0,
+                "Rechazada": 0,
+                "Sin Registro": 0,
+                "Traslado": 0
+            },
+            "tieneOncologica": false,
+            "esperaActivaPromedio": 343,
+            "esperaActivaN": 2,
+            "esperaCerradaPromedio": 91,
+            "esperaCerradaN": 2
+        },
+        {
+            "comuna": "Calbuco",
+            "totalComuna": 106,
+            "porEspecialidad": {
+                "Ginecologia": 58,
+                "Urologia": 8,
+                "Ginecologia Oncologia": 1,
+                "Nefrologia": 3,
+                "Gastroenterologia": 1
+            },
+            "porEstado": {
+                "Alta Administrativa": 5,
+                "Citada": 5,
+                "Ingresada": 36,
+                "Pendiente": 56,
+                "Rechazada": 4,
+                "Sin Registro": 0,
+                "Traslado": 0
+            },
+            "tieneOncologica": false,
+            "esperaActivaPromedio": 232,
+            "esperaActivaN": 72,
+            "esperaCerradaPromedio": 201,
+            "esperaCerradaN": 33
+        },
+        {
+            "comuna": "Castro",
+            "totalComuna": 7,
+            "porEspecialidad": {
+                "Nefrologia": 1,
+                "Nefrologia Infantil": 1,
+                "Ginecologia Patologia Cervical": 1
+            },
+            "porEstado": {
+                "Alta Administrativa": 1,
+                "Citada": 0,
+                "Ingresada": 3,
+                "Pendiente": 1,
+                "Rechazada": 1,
+                "Sin Registro": 1,
+                "Traslado": 0
+            },
+            "tieneOncologica": false,
+            "esperaActivaPromedio": 244,
+            "esperaActivaN": 4,
+            "esperaCerradaPromedio": 139,
+            "esperaCerradaN": 3
+        },
+        {
+            "comuna": "Chaitén",
+            "totalComuna": 11,
+            "porEspecialidad": {
+                "Ginecologia": 6,
+                "Urologia": 4
+            },
+            "porEstado": {
+                "Alta Administrativa": 0,
+                "Citada": 0,
+                "Ingresada": 1,
+                "Pendiente": 10,
+                "Rechazada": 0,
+                "Sin Registro": 0,
+                "Traslado": 0
+            },
+            "tieneOncologica": false,
+            "esperaActivaPromedio": 138,
+            "esperaActivaN": 10,
+            "esperaCerradaPromedio": 404,
+            "esperaCerradaN": 1
+        },
+        {
+            "comuna": "Cochamó",
+            "totalComuna": 5,
+            "porEspecialidad": {
+                "Ginecologia": 4,
+                "Urologia": 1
+            },
+            "porEstado": {
+                "Alta Administrativa": 0,
+                "Citada": 1,
+                "Ingresada": 1,
+                "Pendiente": 3,
+                "Rechazada": 0,
+                "Sin Registro": 0,
+                "Traslado": 0
+            },
+            "tieneOncologica": false,
+            "esperaActivaPromedio": 234,
+            "esperaActivaN": 4,
+            "esperaCerradaPromedio": 295,
+            "esperaCerradaN": 1
+        },
+        {
+            "comuna": "Fresia",
+            "totalComuna": 37,
+            "porEspecialidad": {
+                "Ginecologia": 20,
+                "Urologia": 8,
+                "Nefrologia": 1,
+                "Cuidados Paliativos": 1
+            },
+            "porEstado": {
+                "Alta Administrativa": 1,
+                "Citada": 0,
+                "Ingresada": 11,
+                "Pendiente": 21,
+                "Rechazada": 4,
+                "Sin Registro": 0,
+                "Traslado": 0
+            },
+            "tieneOncologica": false,
+            "esperaActivaPromedio": 215,
+            "esperaActivaN": 28,
+            "esperaCerradaPromedio": 194,
+            "esperaCerradaN": 9
+        },
+        {
+            "comuna": "Frutillar",
+            "totalComuna": 54,
+            "porEspecialidad": {
+                "Gastroenterologia": 2,
+                "Ginecologia": 31,
+                "Nefrologia": 2,
+                "Coloproctologia": 2,
+                "Urologia": 2,
+                "Cuidados Paliativos": 1,
+                "Nefrologia Infantil": 1
+            },
+            "porEstado": {
+                "Alta Administrativa": 2,
+                "Citada": 4,
+                "Ingresada": 12,
+                "Pendiente": 36,
+                "Rechazada": 0,
+                "Sin Registro": 0,
+                "Traslado": 0
+            },
+            "tieneOncologica": false,
+            "esperaActivaPromedio": 187,
+            "esperaActivaN": 42,
+            "esperaCerradaPromedio": 207,
+            "esperaCerradaN": 10
+        },
+        {
+            "comuna": "Futaleufú",
+            "totalComuna": 4,
+            "porEspecialidad": {
+                "Ginecologia": 3,
+                "Nefrologia": 1
+            },
+            "porEstado": {
+                "Alta Administrativa": 0,
+                "Citada": 0,
+                "Ingresada": 1,
+                "Pendiente": 3,
+                "Rechazada": 0,
+                "Sin Registro": 0,
+                "Traslado": 0
+            },
+            "tieneOncologica": false,
+            "esperaActivaPromedio": 335,
+            "esperaActivaN": 4,
+            "esperaCerradaPromedio": null,
+            "esperaCerradaN": 0
+        },
+        {
+            "comuna": "Hualaihué",
+            "totalComuna": 17,
+            "porEspecialidad": {
+                "Ginecologia": 10,
+                "Geriatria": 1
+            },
+            "porEstado": {
+                "Alta Administrativa": 3,
+                "Citada": 1,
+                "Ingresada": 3,
+                "Pendiente": 10,
+                "Rechazada": 0,
+                "Sin Registro": 0,
+                "Traslado": 0
+            },
+            "tieneOncologica": false,
+            "esperaActivaPromedio": 257,
+            "esperaActivaN": 14,
+            "esperaCerradaPromedio": 130,
+            "esperaCerradaN": 3
+        },
+        {
+            "comuna": "Llanquihue",
+            "totalComuna": 44,
+            "porEspecialidad": {
+                "Ginecologia": 16,
+                "Nefrologia": 6,
+                "Urologia": 2,
+                "Pediatria": 1,
+                "Ginecologia Oncologia": 1,
+                "Neurologia": 1
+            },
+            "porEstado": {
+                "Alta Administrativa": 3,
+                "Citada": 4,
+                "Ingresada": 21,
+                "Pendiente": 16,
+                "Rechazada": 0,
+                "Sin Registro": 0,
+                "Traslado": 0
+            },
+            "tieneOncologica": false,
+            "esperaActivaPromedio": 201,
+            "esperaActivaN": 23,
+            "esperaCerradaPromedio": 190,
+            "esperaCerradaN": 21
+        },
+        {
+            "comuna": "Los Muermos",
+            "totalComuna": 36,
+            "porEspecialidad": {
+                "Ginecologia": 24,
+                "Coloproctologia": 1,
+                "Cuidados Paliativos": 2,
+                "Nefrologia": 1,
+                "Ginecologia Oncologia": 1,
+                "Urologia": 1
+            },
+            "porEstado": {
+                "Alta Administrativa": 1,
+                "Citada": 1,
+                "Ingresada": 9,
+                "Pendiente": 25,
+                "Rechazada": 0,
+                "Sin Registro": 0,
+                "Traslado": 0
+            },
+            "tieneOncologica": false,
+            "esperaActivaPromedio": 159,
+            "esperaActivaN": 27,
+            "esperaCerradaPromedio": 107,
+            "esperaCerradaN": 8
+        },
+        {
+            "comuna": "Maullín",
+            "totalComuna": 50,
+            "porEspecialidad": {
+                "Ginecologia": 24,
+                "Coloproctologia": 2,
+                "Ginecologia Oncologia": 1,
+                "Urologia": 3,
+                "Nefrologia": 1
+            },
+            "porEstado": {
+                "Alta Administrativa": 2,
+                "Citada": 3,
+                "Ingresada": 17,
+                "Pendiente": 26,
+                "Rechazada": 2,
+                "Sin Registro": 0,
+                "Traslado": 0
+            },
+            "tieneOncologica": false,
+            "esperaActivaPromedio": 248,
+            "esperaActivaN": 35,
+            "esperaCerradaPromedio": 164,
+            "esperaCerradaN": 15
+        },
+        {
+            "comuna": "Palena",
+            "totalComuna": 2,
+            "porEspecialidad": {
+                "Ginecologia": 1
+            },
+            "porEstado": {
+                "Alta Administrativa": 0,
+                "Citada": 0,
+                "Ingresada": 1,
+                "Pendiente": 1,
+                "Rechazada": 0,
+                "Sin Registro": 0,
+                "Traslado": 0
+            },
+            "tieneOncologica": false,
+            "esperaActivaPromedio": 296,
+            "esperaActivaN": 1,
+            "esperaCerradaPromedio": 107,
+            "esperaCerradaN": 1
+        },
+        {
+            "comuna": "Puerto Montt",
+            "totalComuna": 791,
+            "porEspecialidad": {
+                "Ginecologia": 428,
+                "Urologia": 60,
+                "Pediatria": 1,
+                "Fisiatria": 9,
+                "Coloproctologia": 11,
+                "Gastroenterologia": 9,
+                "Hematologia": 2,
+                "Urologia Infantil": 4,
+                "Nefrologia": 28,
+                "Neurocirugia": 2,
+                "Neurologia": 2,
+                "Gastroenterologia Infantil": 3,
+                "Geriatria": 1,
+                "Ginecologia Oncologia": 9,
+                "Cuidados Paliativos": 2,
+                "Cirugia": 3,
+                "Ginecologia Patologia Cervical": 2,
+                "Matrona": 1,
+                "Nefrologia Infantil": 1
+            },
+            "porEstado": {
+                "Alta Administrativa": 25,
+                "Citada": 35,
+                "Ingresada": 243,
+                "Pendiente": 475,
+                "Rechazada": 10,
+                "Sin Registro": 3,
+                "Traslado": 0
+            },
+            "tieneOncologica": false,
+            "esperaActivaPromedio": 209,
+            "esperaActivaN": 569,
+            "esperaCerradaPromedio": 197,
+            "esperaCerradaN": 217
+        },
+        {
+            "comuna": "Puerto Varas",
+            "totalComuna": 82,
+            "porEspecialidad": {
+                "Urologia Infantil": 2,
+                "Coloproctologia": 3,
+                "Ginecologia": 39,
+                "Urologia": 8,
+                "Gastroenterologia": 2,
+                "Ginecologia Oncologia": 1,
+                "Oncologia": 1,
+                "Nefrologia": 2,
+                "Cuidados Paliativos": 1,
+                "Neurologia": 1,
+                "Nefrologia Infantil": 1,
+                "Gastroenterologia Infantil": 1
+            },
+            "porEstado": {
+                "Alta Administrativa": 1,
+                "Citada": 6,
+                "Ingresada": 24,
+                "Pendiente": 48,
+                "Rechazada": 2,
+                "Sin Registro": 1,
+                "Traslado": 0
+            },
+            "tieneOncologica": false,
+            "esperaActivaPromedio": 193,
+            "esperaActivaN": 58,
+            "esperaCerradaPromedio": 145,
+            "esperaCerradaN": 24
+        },
+        {
+            "comuna": "Quellón",
+            "totalComuna": 2,
+            "porEspecialidad": {},
+            "porEstado": {
+                "Alta Administrativa": 1,
+                "Citada": 0,
+                "Ingresada": 1,
+                "Pendiente": 0,
+                "Rechazada": 0,
+                "Sin Registro": 0,
+                "Traslado": 0
+            },
+            "tieneOncologica": false,
+            "esperaActivaPromedio": 456,
+            "esperaActivaN": 1,
+            "esperaCerradaPromedio": 85,
+            "esperaCerradaN": 1
+        }
+    ]
+}
+};
+
+/* ===================== ESTADO GLOBAL DE LA APP ===================== */
+let currentSnapshotKey = Object.keys(REAL_DATA_HISTORY).sort().pop(); // el más reciente por defecto
+let viewMode = "volumen"; // volumen | tasa | urgencia
+let prioridadClinica = false;
+let modoAuditoria = false;
+let filtroTipo = null; // "especialidad" | "estado" | null
+let geoLayer = null;
+let geojsonData = null;
+window._openComuna = null;
+
+function normName(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
+
+function getComunas(snapshotKey){
+  return REAL_DATA_HISTORY[snapshotKey].comunas.map(c => {
+    const especialidadSum = Object.values(c.porEspecialidad).reduce((a,b)=>a+b,0);
+    return {
+      ...c,
+      especialidadSum,
+      sinRegistrar: c.totalComuna - especialidadSum,
+      poblacion: POBLACION_COMUNA[c.comuna] || null,
+      tasa10k: POBLACION_COMUNA[c.comuna] ? (c.totalComuna / POBLACION_COMUNA[c.comuna] * 10000) : null
+    };
+  });
+}
+function comunaByNormFor(list){
+  const map = {};
+  list.forEach(c => { map[normName(c.comuna)] = c; });
+  return map;
+}
+
+const todasEspecialidades = [...new Set(
+  Object.values(REAL_DATA_HISTORY).flatMap(s => s.comunas.flatMap(c => Object.keys(c.porEspecialidad)))
+)].sort();
+if(todasEspecialidades.length === 0){
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('spec-list').innerHTML = `<p style="font-size:11.5px;color:var(--ink-mute);font-style:italic;">Sin datos de especialidad todavía — pendiente de exportar.</p>`;
+  });
+}
+const todosEstados = ["Alta Administrativa","Citada","Ingresada","Pendiente","Rechazada","Sin Registro","Traslado"];
+
+/* ===================== SNAPSHOT SELECTOR ===================== */
+const snapshotSelect = document.getElementById('snapshot-select');
+Object.keys(REAL_DATA_HISTORY).sort().forEach(k => {
+  const opt = document.createElement('option');
+  opt.value = k; opt.textContent = k;
+  snapshotSelect.appendChild(opt);
+});
+snapshotSelect.value = currentSnapshotKey;
+snapshotSelect.addEventListener('change', () => {
+  currentSnapshotKey = snapshotSelect.value;
+  updateTrendTag();
+  updateMap();
+});
+
+function updateTrendTag(){
+  const keys = Object.keys(REAL_DATA_HISTORY).sort();
+  const idx = keys.indexOf(currentSnapshotKey);
+  const tag = document.getElementById('trend-tag');
+  if(idx <= 0){ tag.textContent = "Primer período registrado"; tag.className = "trend-tag trend-flat"; return; }
+  const prevKey = keys[idx-1];
+  const totalNow = getComunas(currentSnapshotKey).reduce((a,c)=>a+c.totalComuna,0);
+  const totalPrev = getComunas(prevKey).reduce((a,c)=>a+c.totalComuna,0);
+  const diff = totalNow - totalPrev;
+  if(diff > 0){ tag.textContent = `▲ +${diff} vs ${prevKey}`; tag.className = "trend-tag trend-up"; }
+  else if(diff < 0){ tag.textContent = `▼ ${diff} vs ${prevKey}`; tag.className = "trend-tag trend-down"; }
+  else { tag.textContent = `= sin cambio vs ${prevKey}`; tag.className = "trend-tag trend-flat"; }
+}
+
+/* ===================== VIEW MODE SELECTOR ===================== */
+document.querySelectorAll('#view-mode-seg button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#view-mode-seg button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    viewMode = btn.dataset.mode;
+    document.getElementById('chip-prioridad').style.display = viewMode === 'urgencia' ? 'flex' : 'none';
+    document.getElementById('legend-volumen').style.display = viewMode === 'urgencia' ? 'none' : 'flex';
+    document.getElementById('legend-urgencia').style.display = viewMode === 'urgencia' ? 'flex' : 'none';
+    updateMap();
+  });
+});
+document.getElementById('chip-prioridad').style.display = 'none';
+
+document.getElementById('chk-prioridad').addEventListener('change', (e) => {
+  prioridadClinica = e.target.checked;
+  document.getElementById('chip-prioridad').classList.toggle('active', prioridadClinica);
+  updateMap();
+});
+document.getElementById('chk-auditoria').addEventListener('change', (e) => {
+  modoAuditoria = e.target.checked;
+  document.getElementById('chip-auditoria').classList.toggle('active', modoAuditoria);
+  updateMap();
+});
+
+/* ===================== PANEL ESPECIALIDAD / ESTADO (excluyentes) ===================== */
+const specList = document.getElementById('spec-list');
+todasEspecialidades.forEach(esp => {
+  const row = document.createElement('label');
+  row.className = 'spec-item';
+  row.innerHTML = `<input type="checkbox" class="spec-check" value="${esp}"> ${esp}`;
+  specList.appendChild(row);
+});
+const estadoList = document.getElementById('estado-list');
+todosEstados.forEach(est => {
+  const row = document.createElement('label');
+  row.className = 'spec-item';
+  row.innerHTML = `<input type="checkbox" class="estado-check" value="${est}"> ${est}`;
+  estadoList.appendChild(row);
+});
+
+function anySpecChecked(){ return Array.from(document.querySelectorAll('.spec-check')).some(c => c.checked); }
+function anyEstadoChecked(){ return Array.from(document.querySelectorAll('.estado-check')).some(c => c.checked); }
+
+document.querySelectorAll('.spec-check').forEach(c => c.addEventListener('change', () => {
+  if(anySpecChecked()){
+    document.querySelectorAll('.estado-check').forEach(e => e.checked = false);
+    filtroTipo = 'especialidad';
+  } else if(!anyEstadoChecked()){ filtroTipo = null; }
+  updateMap();
+}));
+document.querySelectorAll('.estado-check').forEach(c => c.addEventListener('change', () => {
+  if(anyEstadoChecked()){
+    document.querySelectorAll('.spec-check').forEach(e => e.checked = false);
+    filtroTipo = 'estado';
+  } else if(!anySpecChecked()){ filtroTipo = null; }
+  updateMap();
+}));
+document.getElementById('spec-all').addEventListener('click', () => {
+  document.querySelectorAll('.spec-check').forEach(c => c.checked = true);
+  document.querySelectorAll('.estado-check').forEach(c => c.checked = false);
+  filtroTipo = 'especialidad'; updateMap();
+});
+document.getElementById('spec-clear').addEventListener('click', () => {
+  document.querySelectorAll('.spec-check').forEach(c => c.checked = false);
+  if(!anyEstadoChecked()) filtroTipo = null; updateMap();
+});
+document.getElementById('estado-all').addEventListener('click', () => {
+  document.querySelectorAll('.estado-check').forEach(c => c.checked = true);
+  document.querySelectorAll('.spec-check').forEach(c => c.checked = false);
+  filtroTipo = 'estado'; updateMap();
+});
+document.getElementById('estado-clear').addEventListener('click', () => {
+  document.querySelectorAll('.estado-check').forEach(c => c.checked = false);
+  if(!anySpecChecked()) filtroTipo = null; updateMap();
+});
+
+function getSelectedEspecialidades(){ return Array.from(document.querySelectorAll('.spec-check:checked')).map(c=>c.value); }
+function getSelectedEstados(){ return Array.from(document.querySelectorAll('.estado-check:checked')).map(c=>c.value); }
+
+/* ===================== VALOR POR COMUNA SEGÚN MODO + FILTRO ===================== */
+function valorComuna(c){
+  let base = c.totalComuna;
+  if(filtroTipo === 'especialidad'){
+    const sel = getSelectedEspecialidades();
+    base = sel.reduce((s,e) => s + (c.porEspecialidad[e]||0), 0);
+  } else if(filtroTipo === 'estado'){
+    const sel = getSelectedEstados();
+    base = sel.reduce((s,e) => s + (c.porEstado[e]||0), 0);
+  }
+  if(viewMode === 'tasa'){
+    if(!c.poblacion) return null;
+    return c.poblacion ? (base / c.poblacion * 10000) : null;
+  }
+  return base;
+}
+const MUESTRA_MINIMA = 5; // por debajo de esto, el promedio de espera se marca como poco confiable
+function nivelUrgenciaComuna(c){
+  if(c.esperaActivaPromedio == null) return null;
+  let n = nivelEspera(c.esperaActivaPromedio);
+  if(prioridadClinica && c.tieneOncologica){
+    const orden = ["ok","warn","prio","crit"];
+    if(orden.indexOf(n.nivel) < orden.indexOf("prio")){
+      n = RANGOS_ESPERA.find(r => r.nivel === "prio");
+    }
+  }
+  return n;
+}
+
+/* ===================== MAPA ===================== */
+const NODATA_COLOR = '#e4e4e0';
+function colorForVolumen(value, max){
+  if(value == null || value <= 0) return NODATA_COLOR;
+  const t = max > 0 ? Math.sqrt(value / max) : 0;
+  const stops = [[220,238,251],[11,92,133]];
+  const r = Math.round(stops[0][0] + (stops[1][0]-stops[0][0])*t);
+  const g = Math.round(stops[0][1] + (stops[1][1]-stops[0][1])*t);
+  const b = Math.round(stops[0][2] + (stops[1][2]-stops[0][2])*t);
+  return `rgb(${r},${g},${b})`;
+}
+
+async function initMap(){
+  if(typeof L === 'undefined'){
+    document.getElementById('map').style.display = 'none';
+    document.getElementById('map-error').style.display = 'block';
+    return;
+  }
+  const map = L.map('map', { scrollWheelZoom:false }).setView([-42.6, -72.9], 6.7);
+  window._map = map;
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap, &copy; CARTO', maxZoom: 12
+  }).addTo(map);
+
+  try{
+    const res = await fetch('loslagos.geojson');
+    geojsonData = await res.json();
+  } catch(err){
+    document.getElementById('map').style.display = 'none';
+    document.getElementById('map-error').style.display = 'block';
+    return;
+  }
+
+  geoLayer = L.geoJSON(geojsonData, {
+    style: () => ({ color:'#0b5c85', weight:1, fillOpacity:0.85, fillColor:NODATA_COLOR }),
+    onEachFeature: (feature, layer) => {
+      const nombreGeo = feature.properties.comuna || feature.properties.NOM_COM;
+      layer._nombreGeo = nombreGeo;
+      layer.bindTooltip('', { sticky:true });
+      layer.on('mouseover', () => layer.setStyle({ weight:2.5 }));
+      layer.on('mouseout', () => layer.setStyle({ weight:1 }));
+      layer.on('click', () => {
+        const comunas = getComunas(currentSnapshotKey);
+        const c = comunaByNormFor(comunas)[normName(nombreGeo)];
+        openComunaDetail(c, nombreGeo);
+      });
+      const center = layer.getBounds().getCenter();
+      const label = L.marker(center, {
+        icon: L.divIcon({ className:'comuna-label', html:'', iconSize:null }),
+        interactive:false
+      }).addTo(map);
+      layer._label = label;
+    }
+  }).addTo(map);
+
+  updateTrendTag();
+  updateMap();
+}
+
+function openComunaDetail(c, nombreGeojson){
+  const noteEl = document.getElementById('cd-note');
+  if(!c){
+    document.getElementById('cd-title').innerHTML = nombreGeojson;
+    document.getElementById('cd-sub').textContent = 'Sin personas registradas en esta comuna';
+    document.getElementById('cd-list').innerHTML = '';
+    noteEl.style.display = 'none';
+    document.getElementById('comuna-detail').style.display = 'block';
+    window._openComuna = null;
+    return;
+  }
+  window._openComuna = c;
+
+  let badgeHtml = '';
+  const n = nivelUrgenciaComuna(c);
+  if(n){
+    badgeHtml = `<span class="sem-badge" style="background:${SEM_COLOR_HEX[n.nivel]}22;color:${SEM_COLOR_HEX[n.nivel]};">${n.label}</span>`;
+  }
+  document.getElementById('cd-title').innerHTML = `${c.comuna} ${badgeHtml}`;
+
+  let subParts = [`${c.totalComuna} personas en total`];
+  if(c.esperaActivaPromedio != null){
+    const bajaMuestra = c.esperaActivaN != null && c.esperaActivaN < MUESTRA_MINIMA;
+    subParts.push(`espera activa: ${c.esperaActivaPromedio} días (n=${c.esperaActivaN}${bajaMuestra ? ', muestra baja' : ''})`);
+  }
+  if(c.esperaCerradaPromedio != null){
+    const bajaMuestraC = c.esperaCerradaN != null && c.esperaCerradaN < MUESTRA_MINIMA;
+    subParts.push(`espera cerrada (ya ingresados): ${c.esperaCerradaPromedio} días (n=${c.esperaCerradaN}${bajaMuestraC ? ', muestra baja' : ''})`);
+  }
+  if(c.tasa10k != null) subParts.push(`${c.tasa10k.toFixed(1)} por 10.000 hab.`);
+  document.getElementById('cd-sub').textContent = subParts.join(' · ');
+
+  let entries;
+  let pendienteEspecialidad = false;
+  if(filtroTipo === 'estado'){
+    entries = Object.entries(c.porEstado).sort((a,b)=>b[1]-a[1]);
+  } else {
+    const sel = getSelectedEspecialidades();
+    entries = Object.entries(c.porEspecialidad)
+      .filter(([esp]) => sel.length === 0 || sel.includes(esp))
+      .sort((a,b) => b[1] - a[1]);
+    if(Object.keys(c.porEspecialidad).length === 0) pendienteEspecialidad = true;
+  }
+  const max = entries.length ? Math.max(...entries.map(e=>e[1]),1) : 1;
+  if(pendienteEspecialidad){
+    document.getElementById('cd-list').innerHTML = `<p style="font-size:12px;color:var(--ink-mute);font-style:italic;margin:4px 0;">Desglose por especialidad pendiente de exportar desde Excel.</p>`;
+  } else {
+    document.getElementById('cd-list').innerHTML = entries.map(([label,v]) => `
+      <div class="cd-row">
+        <span class="cname" title="${label}">${label}</span>
+        <span class="cbar-wrap"><span class="cbar" style="width:${max>0 ? (v/max*100) : 0}%"></span></span>
+        <span class="cval">${v}</span>
+      </div>
+    `).join('');
+  }
+
+  if(modoAuditoria && c.sinRegistrar > 0){
+    noteEl.style.display = 'block';
+    noteEl.textContent = `+ ${c.sinRegistrar} persona${c.sinRegistrar>1?'s':''} más en esta comuna sin especialidad de derivación registrada (no incluida en el desglose de arriba).`;
+  } else {
+    noteEl.style.display = 'none';
+  }
+  document.getElementById('comuna-detail').style.display = 'block';
+}
+document.getElementById('cd-close').addEventListener('click', () => {
+  document.getElementById('comuna-detail').style.display = 'none';
+  window._openComuna = null;
+});
+
+function updateMap(){
+  if(!geoLayer) return;
+  const comunas = getComunas(currentSnapshotKey);
+  const byNorm = comunaByNormFor(comunas);
+  document.getElementById('panel-especialidad').classList.toggle('disabled', filtroTipo === 'estado');
+  document.getElementById('panel-estado').classList.toggle('disabled', filtroTipo === 'especialidad');
+
+  let max = 1;
+  if(viewMode !== 'urgencia'){
+    const values = comunas.map(c => valorComuna(c)).filter(v => v != null);
+    max = Math.max(...values, 1);
+  }
+
+  geoLayer.eachLayer(layer => {
+    const c = byNorm[normName(layer._nombreGeo)];
+    let fill = NODATA_COLOR, tooltip = `${layer._nombreGeo}: sin datos`;
+    if(c){
+      if(viewMode === 'urgencia'){
+        const n = nivelUrgenciaComuna(c);
+        fill = n ? SEM_COLOR_HEX[n.nivel] : NODATA_COLOR;
+        tooltip = n ? `${c.comuna}: ${c.esperaActivaPromedio} días de espera activa — ${n.label}` : `${c.comuna}: sin dato de espera activa`;
+      } else {
+        const v = valorComuna(c);
+        fill = colorForVolumen(v, max);
+        tooltip = viewMode === 'tasa'
+          ? `${c.comuna}: ${v != null ? v.toFixed(1) : 's/d'} x10.000 hab.`
+          : `${c.comuna}: ${v} personas`;
+      }
+    }
+    layer.setStyle({ fillColor: fill, color:'#0b5c85', weight:1, fillOpacity:0.85 });
+    layer.setTooltipContent(tooltip);
+    if(layer._label){
+      const short = layer._nombreGeo.split(' ')[0];
+      let labelTxt = short;
+      if(c){
+        if(viewMode === 'urgencia') labelTxt = `${short}: ${c.esperaActivaPromedio}d`;
+        else { const v = valorComuna(c); labelTxt = `${short}: ${v != null ? (viewMode==='tasa'?v.toFixed(1):v) : 's/d'}`; }
+      }
+      layer._label.setIcon(L.divIcon({ className:'comuna-label', html:labelTxt, iconSize:null }));
+    }
+  });
+
+  const filtroTxt = filtroTipo === 'especialidad' ? ` · filtrado por especialidad: ${getSelectedEspecialidades().join(', ')||'(ninguna)'}`
+                   : filtroTipo === 'estado' ? ` · filtrado por estado: ${getSelectedEstados().join(', ')||'(ninguno)'}` : '';
+  const modoTxt = viewMode === 'urgencia' ? 'urgencia por días de espera' : viewMode === 'tasa' ? 'tasa por 10.000 habitantes' : 'volumen total';
+  document.getElementById('map-stats').textContent = `Período ${currentSnapshotKey} · vista: ${modoTxt}${filtroTxt}`;
+
+  if(viewMode !== 'urgencia'){
+    const vals = comunas.map(c => valorComuna(c)).filter(v => v != null);
+    document.getElementById('legend-min').textContent = vals.length ? Math.min(...vals).toFixed(viewMode==='tasa'?1:0) : '0';
+    document.getElementById('legend-max').textContent = vals.length ? Math.max(...vals).toFixed(viewMode==='tasa'?1:0) : '0';
+  }
+
+  // Ranking
+  let ranked;
+  if(viewMode === 'urgencia'){
+    ranked = comunas.filter(c => c.esperaActivaPromedio != null)
+      .map(c => ({ comuna:c.comuna, v:c.esperaActivaPromedio, nivel: nivelUrgenciaComuna(c), n:c.esperaActivaN, bajaMuestra: c.esperaActivaN < MUESTRA_MINIMA }))
+      .sort((a,b) => b.v - a.v);
+  } else {
+    ranked = comunas.map(c => ({ comuna:c.comuna, v: valorComuna(c) || 0 })).sort((a,b) => b.v - a.v);
+  }
+  const rankMax = ranked[0] ? ranked[0].v : 1;
+  document.getElementById('ranking-title').textContent =
+    viewMode === 'urgencia' ? 'Ranking de comunas — días de espera promedio (mayor a menor)' :
+    viewMode === 'tasa' ? 'Ranking de comunas — tasa por 10.000 habitantes' :
+    'Ranking de comunas — volumen' + filtroTxt;
+  document.getElementById('ranking-list').innerHTML = ranked.map(r => {
+    const dot = viewMode === 'urgencia' && r.nivel ? `<span class="rdot" style="background:${SEM_COLOR_HEX[r.nivel.nivel]}"></span>` : '';
+    const bajaMuestraTxt = viewMode === 'urgencia' && r.bajaMuestra ? ` <span title="Muestra baja (n=${r.n}), interpretar con cautela" style="color:var(--warn);">⚠</span>` : '';
+    const valTxt = viewMode === 'urgencia' ? `${r.v} días${bajaMuestraTxt}` : viewMode === 'tasa' ? r.v.toFixed(1) : r.v;
+    return `
+    <div class="rank-row">
+      ${dot}
+      <span class="rname">${r.comuna}</span>
+      <span class="rbar-wrap"><span class="rbar" style="width:${rankMax>0 ? (r.v/rankMax*100) : 0}%; ${viewMode==='urgencia' && r.nivel ? 'background:'+SEM_COLOR_HEX[r.nivel.nivel]+';' : ''}"></span></span>
+      <span class="rval">${valTxt}</span>
+    </div>`;
+  }).join('');
+
+  if(window._openComuna){
+    const c2 = byNorm[normName(window._openComuna.comuna)];
+    openComunaDetail(c2, window._openComuna.comuna);
+  }
+}
+
+document.getElementById('print-btn').addEventListener('click', () => window.print());
+
+window.addEventListener('load', initMap);
+</script>
+</body>
+</html>
