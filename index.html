@@ -135,7 +135,7 @@
       <h1>Mapa territorial de demanda — Lista de espera</h1>
       <p class="subtitle">Georreferenciación de la lista de espera por comuna, con volumen, tasa por habitante y urgencia de espera.</p>
     </div>
-    <button class="print-btn" id="print-btn">🖨️ Imprimir / Exportar PDF</button>
+    <button class="print-btn" id="print-btn" title="Abre el diálogo de impresión del navegador. Desde ahí puedes elegir 'Guardar como PDF'.">🖨️ Imprimir / Exportar PDF</button>
   </header>
 
   <div class="demo-banner" id="demo-banner">
@@ -146,14 +146,14 @@
     <div class="toolbar-group">
       <label class="group-label">Ver por</label>
       <div class="seg" id="view-mode-seg">
-        <button data-mode="volumen" class="active">Volumen</button>
-        <button data-mode="tasa">Tasa x10.000 hab.</button>
-        <button data-mode="urgencia">Urgencia (espera activa)</button>
+        <button data-mode="volumen" class="active" title="Cantidad total de personas en lista de espera por comuna.">Volumen</button>
+        <button data-mode="tasa" title="Personas en lista de espera cada 10.000 habitantes de la comuna (población aproximada, Censo 2017).">Tasa x10.000 hab.</button>
+        <button data-mode="urgencia" title="Color según el promedio de días de espera activa (personas que aún no han sido atendidas), medido desde la fecha de interconsulta.">Urgencia (espera)</button>
       </div>
     </div>
     <div class="toolbar-group">
       <label class="group-label">Período</label>
-      <select class="snapshot-select" id="snapshot-select"></select>
+      <select class="snapshot-select" id="snapshot-select" title="Selecciona el período (fecha de extracción) para ver el mapa en ese momento."></select>
     </div>
     <div class="toolbar-group">
       <label class="group-label">&nbsp;</label>
@@ -161,13 +161,13 @@
     </div>
     <div class="toolbar-group">
       <label class="group-label">&nbsp;</label>
-      <label class="toggle-chip" id="chip-prioridad">
+      <label class="toggle-chip" id="chip-prioridad" title="Si una comuna tiene al menos 1 persona derivada a 'Ginecología Oncología', sube su color a mínimo 🟠 Prioritario, sin importar sus días de espera. Es un criterio provisional — pendiente de que el equipo clínico defina uno más amplio.">
         <input type="checkbox" id="chk-prioridad"> Prioridad clínica (oncológicas)
       </label>
     </div>
     <div class="toolbar-group">
       <label class="group-label">&nbsp;</label>
-      <label class="toggle-chip" id="chip-auditoria">
+      <label class="toggle-chip" id="chip-auditoria" title="Muestra u oculta, en el detalle de cada comuna, cuántas personas no tienen especialidad de derivación registrada. Apagado por defecto para no confundir al equipo de kine con detalle técnico.">
         <input type="checkbox" id="chk-auditoria"> Modo auditoría
       </label>
     </div>
@@ -202,6 +202,7 @@
     </div>
   </div>
   <p style="font-size:11px;color:var(--ink-mute);margin:-8px 0 12px;">Los filtros de especialidad y estado son excluyentes entre sí: activar uno limpia el otro, para no mezclar datos que no están cruzados.</p>
+  <p id="filtro-urgencia-note" style="display:none;font-size:11px;color:var(--warn);margin:-8px 0 12px;background:var(--warn-bg);padding:8px 10px;border-radius:7px;">Los filtros de especialidad y estado no aplican en la vista "Urgencia": el promedio de días de espera se calculó a nivel de comuna completa, no separado por especialidad ni estado. Cambia a "Volumen" o "Tasa" para usarlos.</p>
 
   <div id="map"></div>
   <div class="comuna-detail" id="comuna-detail" style="display:none;">
@@ -695,8 +696,12 @@ function normName(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\
 function getComunas(snapshotKey){
   return REAL_DATA_HISTORY[snapshotKey].comunas.map(c => {
     const especialidadSum = Object.values(c.porEspecialidad).reduce((a,b)=>a+b,0);
+    // Heurística provisional: prioridad clínica = al menos 1 caso de "Ginecologia Oncologia".
+    // El equipo clínico puede ampliar este criterio más adelante.
+    const tieneOncologicaCalc = (c.porEspecialidad["Ginecologia Oncologia"] || 0) > 0;
     return {
       ...c,
+      tieneOncologica: tieneOncologicaCalc,
       especialidadSum,
       sinRegistrar: c.totalComuna - especialidadSum,
       poblacion: POBLACION_COMUNA[c.comuna] || null,
@@ -989,8 +994,9 @@ function updateMap(){
   if(!geoLayer) return;
   const comunas = getComunas(currentSnapshotKey);
   const byNorm = comunaByNormFor(comunas);
-  document.getElementById('panel-especialidad').classList.toggle('disabled', filtroTipo === 'estado');
-  document.getElementById('panel-estado').classList.toggle('disabled', filtroTipo === 'especialidad');
+  document.getElementById('panel-especialidad').classList.toggle('disabled', filtroTipo === 'estado' || viewMode === 'urgencia');
+  document.getElementById('panel-estado').classList.toggle('disabled', filtroTipo === 'especialidad' || viewMode === 'urgencia');
+  document.getElementById('filtro-urgencia-note').style.display = viewMode === 'urgencia' ? 'block' : 'none';
 
   let max = 1;
   if(viewMode !== 'urgencia'){
