@@ -172,6 +172,9 @@
       </label>
     </div>
   </div>
+  <p class="help-caption" style="font-size:11.5px;color:var(--ink-soft);margin:10px 0 0;padding:8px 12px;background:#f2f1ee;border-radius:8px;">
+    <strong>Volumen</strong>: cantidad total de personas · <strong>Tasa x10.000 hab.</strong>: personas por cada 10.000 habitantes de la comuna · <strong>Urgencia</strong>: color según promedio de días de espera activa · <strong>Prioridad clínica</strong>: sube el color a mínimo 🟠 si la comuna tiene casos de Ginecología Oncología · <strong>Modo auditoría</strong>: en el detalle de cada comuna, muestra cuántas personas no tienen especialidad de derivación registrada.
+  </p>
 
   <p class="map-stats" id="map-stats"></p>
 
@@ -200,8 +203,20 @@
       </div>
       <div class="spec-scroll" id="estado-scroll"><div id="estado-list"></div></div>
     </div>
+    <div class="spec-panel" id="panel-comuna">
+      <div class="spec-panel-sticky">
+        <div class="spec-panel-head">
+          <span>Filtro comuna</span>
+          <div class="spec-panel-actions">
+            <button id="comuna-all">Todas</button>
+            <button id="comuna-clear">Limpiar</button>
+          </div>
+        </div>
+      </div>
+      <div class="spec-scroll" id="comuna-scroll"><div id="comuna-list"></div></div>
+    </div>
   </div>
-  <p style="font-size:11px;color:var(--ink-mute);margin:-8px 0 12px;">Los filtros de especialidad y estado son excluyentes entre sí: activar uno limpia el otro, para no mezclar datos que no están cruzados.</p>
+  <p style="font-size:11px;color:var(--ink-mute);margin:-8px 0 12px;">Especialidad y estado son excluyentes entre sí (activar uno limpia el otro). El filtro de comuna es independiente: se puede combinar con cualquiera de los dos.</p>
   <p id="filtro-urgencia-note" style="display:none;font-size:11px;color:var(--warn);margin:-8px 0 12px;background:var(--warn-bg);padding:8px 10px;border-radius:7px;">Los filtros de especialidad y estado no aplican en la vista "Urgencia": el promedio de días de espera se calculó a nivel de comuna completa, no separado por especialidad ni estado. Cambia a "Volumen" o "Tasa" para usarlos.</p>
 
   <div id="map"></div>
@@ -225,6 +240,7 @@
     <span class="grad"></span>
     <span id="legend-max">Más</span>
     <span class="nodata"><span class="swatch" style="background:#e4e4e0;"></span> Sin datos</span>
+    <span class="nodata" id="legend-excluida" style="display:none;"><span class="swatch" style="background:#e9e8e3;opacity:.45;"></span> Fuera del filtro de comuna</span>
   </div>
   <div class="map-legend sem-legend" id="legend-urgencia" style="display:none;">
     <span><span class="swatch" style="background:var(--sem-ok);"></span> Al día (≤90 días)</span>
@@ -724,6 +740,9 @@ if(todasEspecialidades.length === 0){
   });
 }
 const todosEstados = ["Alta Administrativa","Citada","Ingresada","Pendiente","Rechazada","Sin Registro","Traslado"];
+const todasComunas = [...new Set(
+  Object.values(REAL_DATA_HISTORY).flatMap(s => s.comunas.map(c => c.comuna))
+)].sort();
 
 /* ===================== SNAPSHOT SELECTOR ===================== */
 const snapshotSelect = document.getElementById('snapshot-select');
@@ -832,6 +851,30 @@ document.getElementById('estado-clear').addEventListener('click', () => {
 
 function getSelectedEspecialidades(){ return Array.from(document.querySelectorAll('.spec-check:checked')).map(c=>c.value); }
 function getSelectedEstados(){ return Array.from(document.querySelectorAll('.estado-check:checked')).map(c=>c.value); }
+
+/* ===================== PANEL COMUNA (independiente, no excluyente) ===================== */
+const comunaListEl = document.getElementById('comuna-list');
+todasComunas.forEach(com => {
+  const row = document.createElement('label');
+  row.className = 'spec-item';
+  row.innerHTML = `<input type="checkbox" class="comuna-check" value="${com}"> ${com}`;
+  comunaListEl.appendChild(row);
+});
+document.querySelectorAll('.comuna-check').forEach(c => c.addEventListener('change', updateMap));
+document.getElementById('comuna-all').addEventListener('click', () => {
+  document.querySelectorAll('.comuna-check').forEach(c => c.checked = true);
+  updateMap();
+});
+document.getElementById('comuna-clear').addEventListener('click', () => {
+  document.querySelectorAll('.comuna-check').forEach(c => c.checked = false);
+  updateMap();
+});
+function getSelectedComunas(){ return Array.from(document.querySelectorAll('.comuna-check:checked')).map(c=>c.value); }
+function comunaFiltroActivo(){ return getSelectedComunas().length > 0; }
+function comunaPasaFiltro(nombreComuna){
+  const sel = getSelectedComunas();
+  return sel.length === 0 || sel.includes(nombreComuna);
+}
 
 /* ===================== VALOR POR COMUNA SEGÚN MODO + FILTRO ===================== */
 function valorComuna(c){
@@ -997,17 +1040,22 @@ function updateMap(){
   document.getElementById('panel-especialidad').classList.toggle('disabled', filtroTipo === 'estado' || viewMode === 'urgencia');
   document.getElementById('panel-estado').classList.toggle('disabled', filtroTipo === 'especialidad' || viewMode === 'urgencia');
   document.getElementById('filtro-urgencia-note').style.display = viewMode === 'urgencia' ? 'block' : 'none';
+  document.getElementById('legend-excluida').style.display = comunaFiltroActivo() ? 'inline-flex' : 'none';
 
   let max = 1;
   if(viewMode !== 'urgencia'){
-    const values = comunas.map(c => valorComuna(c)).filter(v => v != null);
+    const values = comunas.filter(c => comunaPasaFiltro(c.comuna)).map(c => valorComuna(c)).filter(v => v != null);
     max = Math.max(...values, 1);
   }
 
   geoLayer.eachLayer(layer => {
     const c = byNorm[normName(layer._nombreGeo)];
+    const excluidaPorFiltro = c && !comunaPasaFiltro(c.comuna);
     let fill = NODATA_COLOR, tooltip = `${layer._nombreGeo}: sin datos`;
-    if(c){
+    if(c && excluidaPorFiltro){
+      fill = '#e9e8e3';
+      tooltip = `${c.comuna}: no incluida en el filtro de comuna actual`;
+    } else if(c){
       if(viewMode === 'urgencia'){
         const n = nivelUrgenciaComuna(c);
         fill = n ? SEM_COLOR_HEX[n.nivel] : NODATA_COLOR;
@@ -1020,12 +1068,14 @@ function updateMap(){
           : `${c.comuna}: ${v} personas`;
       }
     }
-    layer.setStyle({ fillColor: fill, color:'#0b5c85', weight:1, fillOpacity:0.85 });
+    layer.setStyle({ fillColor: fill, color:'#0b5c85', weight:1, fillOpacity: excluidaPorFiltro ? 0.45 : 0.85 });
     layer.setTooltipContent(tooltip);
     if(layer._label){
       const short = layer._nombreGeo.split(' ')[0];
       let labelTxt = short;
-      if(c){
+      if(c && excluidaPorFiltro){
+        labelTxt = short;
+      } else if(c){
         if(viewMode === 'urgencia') labelTxt = `${short}: ${c.esperaActivaPromedio}d`;
         else { const v = valorComuna(c); labelTxt = `${short}: ${v != null ? (viewMode==='tasa'?v.toFixed(1):v) : 's/d'}`; }
       }
@@ -1033,25 +1083,27 @@ function updateMap(){
     }
   });
 
+  const filtroComunaTxt = comunaFiltroActivo() ? ` · comunas: ${getSelectedComunas().length} de ${todasComunas.length} seleccionadas` : '';
   const filtroTxt = filtroTipo === 'especialidad' ? ` · filtrado por especialidad: ${getSelectedEspecialidades().join(', ')||'(ninguna)'}`
                    : filtroTipo === 'estado' ? ` · filtrado por estado: ${getSelectedEstados().join(', ')||'(ninguno)'}` : '';
   const modoTxt = viewMode === 'urgencia' ? 'urgencia por días de espera' : viewMode === 'tasa' ? 'tasa por 10.000 habitantes' : 'volumen total';
-  document.getElementById('map-stats').textContent = `Período ${currentSnapshotKey} · vista: ${modoTxt}${filtroTxt}`;
+  document.getElementById('map-stats').textContent = `Período ${currentSnapshotKey} · vista: ${modoTxt}${filtroTxt}${filtroComunaTxt}`;
 
   if(viewMode !== 'urgencia'){
-    const vals = comunas.map(c => valorComuna(c)).filter(v => v != null);
+    const vals = comunas.filter(c => comunaPasaFiltro(c.comuna)).map(c => valorComuna(c)).filter(v => v != null);
     document.getElementById('legend-min').textContent = vals.length ? Math.min(...vals).toFixed(viewMode==='tasa'?1:0) : '0';
     document.getElementById('legend-max').textContent = vals.length ? Math.max(...vals).toFixed(viewMode==='tasa'?1:0) : '0';
   }
 
   // Ranking
+  const comunasParaRanking = comunas.filter(c => comunaPasaFiltro(c.comuna));
   let ranked;
   if(viewMode === 'urgencia'){
-    ranked = comunas.filter(c => c.esperaActivaPromedio != null)
+    ranked = comunasParaRanking.filter(c => c.esperaActivaPromedio != null)
       .map(c => ({ comuna:c.comuna, v:c.esperaActivaPromedio, nivel: nivelUrgenciaComuna(c), n:c.esperaActivaN, bajaMuestra: c.esperaActivaN < MUESTRA_MINIMA }))
       .sort((a,b) => b.v - a.v);
   } else {
-    ranked = comunas.map(c => ({ comuna:c.comuna, v: valorComuna(c) || 0 })).sort((a,b) => b.v - a.v);
+    ranked = comunasParaRanking.map(c => ({ comuna:c.comuna, v: valorComuna(c) || 0 })).sort((a,b) => b.v - a.v);
   }
   const rankMax = ranked[0] ? ranked[0].v : 1;
   document.getElementById('ranking-title').textContent =
